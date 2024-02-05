@@ -100,11 +100,11 @@ export function isRef(r: any): r is Ref {
 }
 
 /**
- * Takes an inner value and returns a reactive and mutable ref object, which
- * has a single property `.value` that points to the inner value.
+ * 获取一个内部值并返回一个反应性且可变的 ref 对象，该对象
+ * 有一个指向内部值的属性“.value”。
  *
- * @param value - The object to wrap in the ref.
- * @see {@link https://vuejs.org/api/reactivity-core.html#ref}
+ * @param value -要包装在 ref 中的对象。
+ * @参见{@link https://vuejs.org/api/reactivity-core.html#ref}
  */
 export function ref<T>(value: T): Ref<UnwrapRef<T>>
 export function ref<T = any>(): Ref<T | undefined>
