@@ -390,24 +390,23 @@ class GetterRefImpl<T> {
 export type ToRef<T> = IfAny<T, Ref<T>, [T] extends [Ref] ? T : Ref<T>>
 
 /**
- * Used to normalize values / refs / getters into refs.
+ * 用于将值/引用/获取器规范化为引用。
  *
  * @example
  * ```js
- * // returns existing refs as-is
+ * // 将现有引用原样返回
  * toRef(existingRef)
  *
- * // creates a ref that calls the getter on .value access
+ * // 创建一个在访问.value时调用获取器的引用
  * toRef(() => props.foo)
  *
- * // creates normal refs from non-function values
- * // equivalent to ref(1)
+ * // 从非函数值创建普通引用
+ * // 等同于 ref(1)
  * toRef(1)
  * ```
  *
- * Can also be used to create a ref for a property on a source reactive object.
- * The created ref is synced with its source property: mutating the source
- * property will update the ref, and vice-versa.
+ * 还可以用于在源响应式对象上创建属性引用。创建的引用与其源属性同步：
+ * 修改源属性将更新引用，反之亦然。
  *
  * @example
  * ```js
@@ -418,18 +417,17 @@ export type ToRef<T> = IfAny<T, Ref<T>, [T] extends [Ref] ? T : Ref<T>>
  *
  * const fooRef = toRef(state, 'foo')
  *
- * // mutating the ref updates the original
+ * // 修改引用会更新原始对象
  * fooRef.value++
  * console.log(state.foo) // 2
  *
- * // mutating the original also updates the ref
+ * // 修改原始对象也会更新引用
  * state.foo++
  * console.log(fooRef.value) // 3
  * ```
  *
- * @param source - A getter, an existing ref, a non-function value, or a
- *                 reactive object to create a property ref from.
- * @param [key] - (optional) Name of the property in the reactive object.
+ * @param source - 获取器、现有引用、非函数值或要从中创建属性引用的响应式对象。
+ * @param [key] - （可选）响应式对象中的属性名称。
  * @see {@link https://vuejs.org/api/reactivity-utilities.html#toref}
  */
 export function toRef<T>(
@@ -501,12 +499,26 @@ export type ShallowUnwrapRef<T> = {
 
 type DistrubuteRef<T> = T extends Ref<infer V> ? V : T
 
+/*
+ * UnwrapRef类型用于递归地展开给定类型T的响应式引用
+ * 如果T是一个ShallowRef或Ref类型，它将返回引用值的类型。
+ * 如果T不是Ref类型，它将使用UnwrapRefSimple进行展开。
+ */
+
 export type UnwrapRef<T> =
   T extends ShallowRef<infer V>
     ? V
     : T extends Ref<infer V>
       ? UnwrapRefSimple<V>
       : UnwrapRefSimple<T>
+
+/*
+UnwrapRefSimple类型则是用于展开单层的引用类型，但不会递归处理嵌套的引用。
+对于特定的类型（如函数、基础类型、其他Ref类型、某些特殊标记的对象等），UnwrapRefSimple直接返回这个类型。
+对于包含集合类型（如Map、Set、WeakMap、WeakSet）的对象，UnwrapRefSimple会递归地展开这些集合内部值的类型。
+对于对象类型，UnwrapRefSimple会遍历该对象的所有属性，并递归地展开它们的类型（除非这个属性是一个Symbol类型的属性）。
+特别地，如果对象被标记为浅响应式对象（即{ [ShallowReactiveMarker]?: never }），则只展开最顶层的属性。
+ */
 
 export type UnwrapRefSimple<T> = T extends
   | Function
