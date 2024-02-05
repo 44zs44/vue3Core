@@ -238,42 +238,57 @@ export function shallowReadonly<T extends object>(target: T): Readonly<T> {
   )
 }
 
+// 创建一个响应式对象的函数
 function createReactiveObject(
-  target: Target,
-  isReadonly: boolean,
-  baseHandlers: ProxyHandler<any>,
-  collectionHandlers: ProxyHandler<any>,
-  proxyMap: WeakMap<Target, any>,
+  target: Target, // 目标对象
+  isReadonly: boolean, // 是否为只读
+  baseHandlers: ProxyHandler<any>, // 基础的代理处理器，用于普通对象
+  collectionHandlers: ProxyHandler<any>, // 集合的代理处理器，用于Map、Set等
+  proxyMap: WeakMap<Target, any>, // 存储原对象与代理对象的映射
 ) {
+  // 检查target是否是对象，如果不是则直接返回
+  // 只有对象才能转换为响应式对象
   if (!isObject(target)) {
     if (__DEV__) {
       console.warn(`value cannot be made reactive: ${String(target)}`)
     }
     return target
   }
-  // target is already a Proxy, return it.
-  // exception: calling readonly() on a reactive object
+
+  // 如果target已经是一个代理对象，则直接返回它
+  // 特殊情况：如果是在已经是响应式的对象上调用readonly，除外
   if (
-    target[ReactiveFlags.RAW] &&
-    !(isReadonly && target[ReactiveFlags.IS_REACTIVE])
+    target[ReactiveFlags.RAW] && // 检查是否已经是响应式对象
+    !(isReadonly && target[ReactiveFlags.IS_REACTIVE]) // 非只读或已经是响应式的情况
   ) {
     return target
   }
-  // target already has corresponding Proxy
+
+  // 如果已经为target创建过代理，则从proxyMap中取出并返回
   const existingProxy = proxyMap.get(target)
   if (existingProxy) {
     return existingProxy
   }
-  // only specific value types can be observed.
+
+  // 获取target的类型，只有特定的类型才可以被观察
+  // INVALID类型表示不可被代理
   const targetType = getTargetType(target)
   if (targetType === TargetType.INVALID) {
     return target
   }
+
+  // 根据target的类型选择合适的代理处理器
+  // 并创建代理对象
   const proxy = new Proxy(
     target,
     targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers,
   )
+
+  // 将创建的代理对象存储在proxyMap中
+  // 以target为键，proxy为值
   proxyMap.set(target, proxy)
+
+  // 返回创建的代理对象
   return proxy
 }
 
