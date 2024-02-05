@@ -316,7 +316,7 @@ export function isReactive(value: unknown): boolean {
 export function isReadonly(value: unknown): boolean {
   return !!(value && (value as Target)[ReactiveFlags.IS_READONLY])
 }
-
+/* isShallow函数的作用是检查给定的值是否是浅响应式对象。如果是，它将返回true，否则返回false */
 export function isShallow(value: unknown): boolean {
   return !!(value && (value as Target)[ReactiveFlags.IS_SHALLOW])
 }

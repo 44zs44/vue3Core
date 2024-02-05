@@ -152,33 +152,50 @@ function createRef(rawValue: unknown, shallow: boolean) {
   return new RefImpl(rawValue, shallow)
 }
 
+// RefImpl 类定义，T 代表引用的值的类型
 class RefImpl<T> {
+  // 存储响应式转换后的值
   private _value: T
+  // 存储原始值
   private _rawValue: T
 
+  // 可选的依赖管理对象，用于跟踪和触发更新
   public dep?: Dep = undefined
+  // 标记此对象为 ref 类型
   public readonly __v_isRef = true
 
   constructor(
-    value: T,
-    public readonly __v_isShallow: boolean,
+    value: T, // 初始值
+    public readonly __v_isShallow: boolean, // 是否进行浅响应式转换
   ) {
+    // 根据是否浅响应，使用 toRaw 函数获取值的原始版本
     this._rawValue = __v_isShallow ? value : toRaw(value)
+    // 根据是否浅响应，使用 toReactive 函数获取值的响应式版本
     this._value = __v_isShallow ? value : toReactive(value)
   }
 
+  // 当访问 value 时，追踪依赖并返回响应式值
   get value() {
+    // 追踪对这个 ref 的依赖（追踪当前ref对象的值的依赖关系，以便在值发生变化时触发相关的更新操作）
     trackRefValue(this)
+    // 返回响应式值
     return this._value
   }
 
+  // 当设置 value 时，根据新值更新内部状态并触发更新
   set value(newVal) {
+    // 决定是否直接使用 newVal 或将其转换为原始/响应式值
     const useDirectValue =
       this.__v_isShallow || isShallow(newVal) || isReadonly(newVal)
+    // 如果不直接使用，则根据需要转换 newVal
     newVal = useDirectValue ? newVal : toRaw(newVal)
+    // 如果新旧值不同，则更新内部状态并触发响应系统更新
     if (hasChanged(newVal, this._rawValue)) {
+      // 更新原始值
       this._rawValue = newVal
+      // 更新响应式值
       this._value = useDirectValue ? newVal : toReactive(newVal)
+      // 触发更新
       triggerRefValue(this, DirtyLevels.Dirty, newVal)
     }
   }
