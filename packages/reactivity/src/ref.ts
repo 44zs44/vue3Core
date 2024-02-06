@@ -45,19 +45,24 @@ type RefBase<T> = {
 }
 
 export function trackRefValue(ref: RefBase<any>) {
+  // 首先检查是否应该跟踪依赖以及是否存在激活的副作用
   if (shouldTrack && activeEffect) {
+    // 使用 toRaw 获取 ref 的原始值，确保不是代理对象
     ref = toRaw(ref)
+    // 为 ref 对象创建或获取其依赖集合 (dep)
+    // 如果 ref.dep 不存在，则调用 createDep 创建一个新的依赖集合
+    // ComputedRefImpl 实例有特殊处理，因为它们的依赖管理方式略有不同
     trackEffect(
       activeEffect,
       ref.dep ||
         (ref.dep = createDep(
           () => (ref.dep = undefined),
           ref instanceof ComputedRefImpl ? ref : undefined,
-        )),
+        )),// 如果是开发模式 (__DEV__)，则提供额外的调试信息
       __DEV__
         ? {
             target: ref,
-            type: TrackOpTypes.GET,
+            type: TrackOpTypes.GET,// 操作类型是 GET，表示读取操作
             key: 'value',
           }
         : void 0,

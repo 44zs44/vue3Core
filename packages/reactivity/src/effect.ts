@@ -265,17 +265,24 @@ export function trackEffect(
   dep: Dep,
   debuggerEventExtraInfo?: DebuggerEventExtraInfo,
 ) {
+  // 检查该副作用是否已经被该依赖集合追踪
   if (dep.get(effect) !== effect._trackId) {
+    // 如果未追踪，则将副作用添加到依赖集合中，并更新副作用的追踪标识
     dep.set(effect, effect._trackId)
+    // 获取并处理旧的依赖集合
     const oldDep = effect.deps[effect._depsLength]
     if (oldDep !== dep) {
+      // 如果存在旧的依赖集合且与当前依赖集合不同，则需要进行清理
       if (oldDep) {
         cleanupDepEffect(oldDep, effect)
       }
+      // 将当前依赖集合添加到副作用的依赖数组中
       effect.deps[effect._depsLength++] = dep
     } else {
+      // 如果依赖集合相同，则只增加依赖计数
       effect._depsLength++
     }
+    // 如果是开发模式，则调用 onTrack 回调，提供副作用追踪的详细信息
     if (__DEV__) {
       effect.onTrack?.(extend({ effect }, debuggerEventExtraInfo!))
     }
