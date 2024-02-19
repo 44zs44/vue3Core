@@ -67,94 +67,113 @@ export function track(target: object, type: TrackOpTypes, key: unknown) {
 }
 
 /**
- * Finds all deps associated with the target (or a specific property) and
- * triggers the effects stored within.
+ * 查找与目标（或特定属性）关联的所有 deps 并
+ * 触发其中存储的效果。
  *
- * @param target - The reactive object.
- * @param type - Defines the type of the operation that needs to trigger effects.
- * @param key - Can be used to target a specific reactive property in the target object.
+ * @param target -反应对象。
+ * @param type -定义需要触发效果的操作类型。
+ * @param key -可用于定位目标对象中的特定反应属性。
  */
+// 函数通过targetMap获取与目标对象相关联的依赖映射depsMap。如果depsMap不存在，说明该目标对象从未被追踪过，直接返回
+//然后，函数创建一个空数组deps，用于存储要触发的依赖项。根据不同的操作类型，将不同的依赖项添加到deps数组中
+//然后，函数调用pauseScheduling函数，暂停调度，避免触发副作用函数时再次调用track函数
+//接着，函数遍历deps数组，对每个依赖项dep调用triggerEffects函数，触发依赖项dep中存储的副作用函数
+//最后，函数调用resetScheduling函数，重置调度，恢复调度
+// trigger函数：用于触发响应式对象上的依赖更新
 export function trigger(
-  target: object,
-  type: TriggerOpTypes,
-  key?: unknown,
-  newValue?: unknown,
-  oldValue?: unknown,
-  oldTarget?: Map<unknown, unknown> | Set<unknown>,
+  target: object, // 目标对象，即响应式对象
+  type: TriggerOpTypes, // 触发类型，如SET、ADD、DELETE等
+  key?: unknown, // 被操作的属性键
+  newValue?: unknown, // 新值，对于SET操作
+  oldValue?: unknown, // 旧值，对于SET操作
+  oldTarget?: Map<unknown, unknown> | Set<unknown>, // 仅对集合类型如Map/Set在清除操作时使用
 ) {
-  const depsMap = targetMap.get(target)
+  // 从全局的targetMap中获取当前对象的依赖映射
+  const depsMap = targetMap.get(target);
+  // 如果当前对象没有依赖映射，即没有effect依赖于此对象的属性，直接返回
   if (!depsMap) {
-    // never been tracked
-    return
+    return;
   }
 
-  let deps: (Dep | undefined)[] = []
+  // 初始化依赖数组，用于收集将要被触发的effect
+  let deps: (Dep | undefined)[] = [];
+  // 如果操作类型是CLEAR，说明是对集合类型进行了清空操作
   if (type === TriggerOpTypes.CLEAR) {
-    // collection being cleared
-    // trigger all effects for target
-    deps = [...depsMap.values()]
+    // 触发该对象所有属性的effect
+    deps = [...depsMap.values()];
   } else if (key === 'length' && isArray(target)) {
-    const newLength = Number(newValue)
+    // 如果操作是修改数组的length属性
     depsMap.forEach((dep, key) => {
-      if (key === 'length' || (!isSymbol(key) && key >= newLength)) {
-        deps.push(dep)
+      // 收集length属性的依赖，以及所有索引大于或等于新length值的数组元素的依赖
+      if (key === 'length' || (!isSymbol(key) && key >= Number(newValue))) {
+        deps.push(dep);
       }
-    })
+    });
   } else {
-    // schedule runs for SET | ADD | DELETE
+    // 对于SET、ADD、DELETE操作
     if (key !== void 0) {
-      deps.push(depsMap.get(key))
+      // 收集被操作键的依赖
+      deps.push(depsMap.get(key));
     }
-
-    // also run for iteration key on ADD | DELETE | Map.SET
+    // 特殊处理对集合类型的操作
     switch (type) {
       case TriggerOpTypes.ADD:
+        // 如果是向集合添加元素
         if (!isArray(target)) {
-          deps.push(depsMap.get(ITERATE_KEY))
+          // 对于非数组，触发ITERATE_KEY相关的effect
+          deps.push(depsMap.get(ITERATE_KEY));
           if (isMap(target)) {
-            deps.push(depsMap.get(MAP_KEY_ITERATE_KEY))
+            // 对于Map，还需要触发MAP_KEY_ITERATE_KEY相关的effect
+            deps.push(depsMap.get(MAP_KEY_ITERATE_KEY));
           }
         } else if (isIntegerKey(key)) {
-          // new index added to array -> length changes
-          deps.push(depsMap.get('length'))
+          // 对于数组，如果添加的是索引（整数键），需要触发length属性的依赖
+          deps.push(depsMap.get('length'));
         }
-        break
+        break;
       case TriggerOpTypes.DELETE:
+        // 如果是从集合中删除元素
         if (!isArray(target)) {
-          deps.push(depsMap.get(ITERATE_KEY))
+          // 触发ITERATE_KEY相关的effect
+          deps.push(depsMap.get(ITERATE_KEY));
           if (isMap(target)) {
-            deps.push(depsMap.get(MAP_KEY_ITERATE_KEY))
+            // 对于Map，还需要触发MAP_KEY_ITERATE_KEY相关的effect
+            deps.push(depsMap.get(MAP_KEY_ITERATE_KEY));
           }
         }
-        break
+        break;
       case TriggerOpTypes.SET:
+        // 对于Map的SET操作
         if (isMap(target)) {
-          deps.push(depsMap.get(ITERATE_KEY))
+          // 触发ITERATE_KEY相关的effect
+          deps.push(depsMap.get(ITERATE_KEY));
         }
-        break
+        break;
     }
   }
 
-  pauseScheduling()
+  // 暂停调度，这是一个优化步骤，避免在触发effect时立即执行，可以批量处理
+  pauseScheduling();
+  // 遍历deps数组，触发每个依赖的effect执行
   for (const dep of deps) {
     if (dep) {
       triggerEffects(
         dep,
         DirtyLevels.Dirty,
-        __DEV__
-          ? {
-              target,
-              type,
-              key,
-              newValue,
-              oldValue,
-              oldTarget,
-            }
-          : void 0,
-      )
+        // 传递额外的调试信息，如果是开发模式
+        __DEV__ ? {
+          target,
+          type,
+          key,
+          newValue,
+          oldValue,
+          oldTarget,
+        } : void 0,
+      );
     }
   }
-  resetScheduling()
+  // 重置调度状态，恢复到正常的调度逻辑
+  resetScheduling();
 }
 
 export function getDepFromReactive(object: any, key: string | number | symbol) {

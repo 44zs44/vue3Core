@@ -25,107 +25,136 @@ export type DebuggerEventExtraInfo = {
 
 export let activeEffect: ReactiveEffect | undefined
 
+// 1.追踪和管理依赖关系：ReactiveEffect实例会追踪函数(fn)执行过程中所访问的响应式数据（依赖）。
+//   这些依赖被收集起来，以便在数据更新时能够重新执行这个函数，从而触发视图更新或执行其他副作用。
+// 2.控制执行逻辑：通过active属性管理其激活状态，以及通过run方法控制副作用函数的执行，包括处理依赖追踪和清理工作。这样可以优化性能，避免不必要的计算或更新。
+// 3.支持计算属性和观察者模式：ReactiveEffect可以作为计算属性(computed)的基础设施，支持对计算结果的缓存和有效的重新计算策略。
+//   此外，它还可以作为响应式系统中的观察者，响应数据的变化。
+// 4.提供生命周期钩子和调试支持：通过onStop、onTrack和onTrigger等钩子函数，ReactiveEffect允许开发者在副作用的不同阶段插入自定义逻辑，用于调试或扩展功能。
+// 5.优化和状态管理：内部属性如_dirtyLevel和_depsLength用于管理和优化副作用的执行，例如避免不必要的重新计算，并且通过dirty的getter和setter控制计算属性的缓存逻辑。
 export class ReactiveEffect<T = any> {
+  // 表示此效果是否处于活动状态，默认为true
   active = true
+  // 依赖数组，存储此效果依赖的所有响应式对象
   deps: Dep[] = []
 
+  // 可选属性，计算属性实现，如果效果用于计算属性，则会设置此属性
   /**
-   * Can be attached after creation
    * @internal
    */
   computed?: ComputedRefImpl<T>
+  // 可选属性，允许递归触发效果
   /**
    * @internal
    */
   allowRecurse?: boolean
 
+  // 当停止响应式效果时调用的回调函数
   onStop?: () => void
-  // dev only
+  // 仅开发模式下使用，追踪依赖时调用的回调函数
   onTrack?: (event: DebuggerEvent) => void
-  // dev only
+  // 仅开发模式下使用，触发更新时调用的回调函数
   onTrigger?: (event: DebuggerEvent) => void
 
+  // 表示效果的脏状态，用于优化计算属性的重新计算
   /**
    * @internal
    */
   _dirtyLevel = DirtyLevels.Dirty
+  // 用于追踪优化，内部使用
   /**
    * @internal
    */
   _trackId = 0
+  // 当前正在运行的此效果的数量，用于递归调用的管理
   /**
    * @internal
    */
   _runnings = 0
+  // 表示是否应该调度此效果的更新
   /**
    * @internal
    */
   _shouldSchedule = false
+  // 依赖数组的长度，内部使用
   /**
    * @internal
    */
   _depsLength = 0
 
+  // 类构造函数，接收四个参数：fn是效果函数，trigger是触发更新的函数，scheduler是调度器，scope是效果作用域
   constructor(
-    public fn: () => T,
-    public trigger: () => void,
-    public scheduler?: EffectScheduler,
-    scope?: EffectScope,
+    public fn: () => T, // 效果函数，返回泛型T的值
+    public trigger: () => void, // 触发更新的函数
+    public scheduler?: EffectScheduler, // 可选的调度器，用于自定义效果的调度方式
+    scope?: EffectScope, // 可选的效果作用域
   ) {
-    recordEffectScope(this, scope)
+    recordEffectScope(this, scope) // 将效果记录到其作用域
   }
 
+  // 获取效果是否脏（需要重新计算）的属性
   public get dirty() {
     if (this._dirtyLevel === DirtyLevels.MaybeDirty) {
-      pauseTracking()
+      pauseTracking() // 暂停追踪
       for (let i = 0; i < this._depsLength; i++) {
         const dep = this.deps[i]
         if (dep.computed) {
-          triggerComputed(dep.computed)
+          triggerComputed(dep.computed) // 触发计算属性的更新
           if (this._dirtyLevel >= DirtyLevels.Dirty) {
-            break
+            break // 如果效果变脏，则跳出循环
           }
         }
       }
       if (this._dirtyLevel < DirtyLevels.Dirty) {
-        this._dirtyLevel = DirtyLevels.NotDirty
+        this._dirtyLevel = DirtyLevels.NotDirty // 更新脏状态
       }
-      resetTracking()
+      resetTracking() // 重置追踪状态
     }
-    return this._dirtyLevel >= DirtyLevels.Dirty
+    return this._dirtyLevel >= DirtyLevels.Dirty // 返回是否脏
   }
 
+  /*
+  "dirtyLevel"是用于跟踪组件的状态是否发生了变化的一个标志。它用于确定何时需要重新渲染组件
+  "dirtyLevel"有以下几个取值：
+      DirtyLevels.Clean：表示组件状态是干净的，没有发生任何变化。
+      DirtyLevels.Dirty：表示组件状态已经发生了变化，需要重新渲染。
+      DirtyLevels.NotDirty：表示组件状态没有发生变化，但是可能存在子组件的状态发生了变化。
+  当组件的状态发生变化时，Vue 3会将"dirtyLevel"设置为DirtyLevels.Dirty，
+  这样在下一次渲染时，Vue 3会重新计算组件的虚拟DOM，并将其与之前的虚拟DOM进行对比，找出需要更新的部分进行局部更新。
+ */
   public set dirty(v) {
     this._dirtyLevel = v ? DirtyLevels.Dirty : DirtyLevels.NotDirty
   }
 
+  // 运行效果函数
   run() {
-    this._dirtyLevel = DirtyLevels.NotDirty
+    this._dirtyLevel = DirtyLevels.NotDirty // 将脏状态设置为不脏
     if (!this.active) {
-      return this.fn()
+      return this.fn() // 如果效果不活动，则直接运行效果函数
     }
-    let lastShouldTrack = shouldTrack
-    let lastEffect = activeEffect
+    let lastShouldTrack = shouldTrack // 保存当前的追踪状态
+    let lastEffect = activeEffect // 保存当前活动的效果
     try {
-      shouldTrack = true
-      activeEffect = this
-      this._runnings++
-      preCleanupEffect(this)
-      return this.fn()
+      shouldTrack = true // 开启追踪
+      activeEffect = this // 设置当前效果为活动效果
+      this._runnings++ // 增加运行次数
+      preCleanupEffect(this) // 效果运行前的清理工作
+      return this.fn() // 运行效果函数
     } finally {
-      postCleanupEffect(this)
-      this._runnings--
-      activeEffect = lastEffect
-      shouldTrack = lastShouldTrack
+      postCleanupEffect(this) // 效果运行后的清理工作
+      this._runnings-- // 减少运行次数
+      activeEffect = lastEffect // 恢复之前的活动效果
+      shouldTrack = lastShouldTrack // 恢复追踪状态
     }
   }
 
+  // 停止效果
   stop() {
     if (this.active) {
-      preCleanupEffect(this)
-      postCleanupEffect(this)
-      this.onStop?.()
-      this.active = false
+      preCleanupEffect(this) // 停止前的清理工作
+      postCleanupEffect(this) // 停止后的清理工作
+      this.onStop?.() // 调用停止回调函数
+      this.active = false // 设置效果为不活动
     }
   }
 }
@@ -296,29 +325,37 @@ export function trackEffect(
 const queueEffectSchedulers: EffectScheduler[] = []
 
 export function triggerEffects(
-  dep: Dep,
-  dirtyLevel: DirtyLevels,
-  debuggerEventExtraInfo?: DebuggerEventExtraInfo,
+  dep: Dep, // 依赖项
+  dirtyLevel: DirtyLevels, // 脏级别，表示数据的变化程度
+  debuggerEventExtraInfo?: DebuggerEventExtraInfo, // 调试器事件的额外信息
 ) {
+  // 暂停调度，防止在触发效果时进行其他调度
   pauseScheduling()
+  // 遍历依赖项的所有效果
   for (const effect of dep.keys()) {
+    // 如果效果的脏级别小于传入的脏级别，并且依赖项中的效果ID等于效果的跟踪ID
     if (
       effect._dirtyLevel < dirtyLevel &&
       dep.get(effect) === effect._trackId
     ) {
-      const lastDirtyLevel = effect._dirtyLevel
-      effect._dirtyLevel = dirtyLevel
+      const lastDirtyLevel = effect._dirtyLevel // 保存旧的脏级别
+      effect._dirtyLevel = dirtyLevel // 更新脏级别
+
+      // 如果旧的脏级别是“不脏”，则应该调度效果
       if (lastDirtyLevel === DirtyLevels.NotDirty) {
-        effect._shouldSchedule = true
+        effect._shouldSchedule = true // 设置应该调度效果
+
+        // 如果是开发模式，触发效果的onTrigger事件
         if (__DEV__) {
           effect.onTrigger?.(extend({ effect }, debuggerEventExtraInfo))
         }
-        effect.trigger()
+        effect.trigger() // 触发效果
       }
     }
   }
-  scheduleEffects(dep)
-  resetScheduling()
+
+  scheduleEffects(dep) // 调度依赖项的效果
+  resetScheduling() // 重置调度状态
 }
 
 export function scheduleEffects(dep: Dep) {
