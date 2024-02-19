@@ -259,7 +259,13 @@ export function resetScheduling() {
     queueEffectSchedulers.shift()!()
   }
 }
-
+/*
+effect 是一个 ReactiveEffect 类型的对象，表示一个响应式副作用。响应式副作用是一个函数，它会在依赖项发生变化时被触发执行。在这个函数中，你可以执行任何需要响应式数据的操作。
+dep 是一个 Dep 类型的对象，表示一个依赖集合。依赖集合用于跟踪响应式副作用所依赖的数据。当依赖项发生变化时，依赖集合会通知相关的响应式副作用进行更新。
+在 trackEffect 函数中，我们首先检查该副作用是否已经被该依赖集合追踪。如果没有被追踪，则将副作用添加到依赖集合中，并更新副作用的追踪标识。
+然后，我们会将当前依赖集合添加到副作用的依赖数组中。如果依赖集合已经存在于依赖数组中，则只会增加依赖计数。
+这样做的目的是为了确保每个副作用都能正确地跟踪它所依赖的数据，并在依赖项发生变化时进行更新。 
+ */
 export function trackEffect(
   effect: ReactiveEffect,
   dep: Dep,
@@ -269,10 +275,8 @@ export function trackEffect(
   if (dep.get(effect) !== effect._trackId) {
     // 如果未追踪，则将副作用添加到依赖集合中，并更新副作用的追踪标识
     dep.set(effect, effect._trackId)
-    // 获取并处理旧的依赖集合
     const oldDep = effect.deps[effect._depsLength]
     if (oldDep !== dep) {
-      // 如果存在旧的依赖集合且与当前依赖集合不同，则需要进行清理
       if (oldDep) {
         cleanupDepEffect(oldDep, effect)
       }

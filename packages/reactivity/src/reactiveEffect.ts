@@ -21,25 +21,37 @@ export const ITERATE_KEY = Symbol(__DEV__ ? 'iterate' : '')
 export const MAP_KEY_ITERATE_KEY = Symbol(__DEV__ ? 'Map key iterate' : '')
 
 /**
- * Tracks access to a reactive property.
+ * 跟踪对反应性属性的访问。
  *
- * This will check which effect is running at the moment and record it as dep
- * which records all effects that depend on the reactive property.
- *
- * @param target - Object holding the reactive property.
- * @param type - Defines the type of access to the reactive property.
- * @param key - Identifier of the reactive property to track.
+ * 这将检查当前正在运行哪个效果并将其记录为 dep
+ * 它记录了依赖于反应性属性的所有效果。
+ * @param target -持有反应属性的对象。
+ * @param type -定义对反应性属性的访问类型。
+ * @param key -要跟踪的反应性属性的标识符。
  */
+// 定义一个函数`track`，用于跟踪一个对象的属性被副作用函数依赖的关系。
+// 在一个全局的targetMap中记录哪些响应式对象（target）的哪些属性（key）被哪些副作用函数（activeEffect）所依赖
+// 当响应式对象的属性发生变化时，可以快速找到依赖这个属性的所有副作用函数并执行它们
 export function track(target: object, type: TrackOpTypes, key: unknown) {
+  // 如果`shouldTrack`（是否应该跟踪）和`activeEffect`（当前激活的副作用函数）都存在，
+  // 则说明现在是在收集依赖的过程中。
   if (shouldTrack && activeEffect) {
+    // 尝试从`targetMap`（全局的目标对象到依赖映射的Map）中获取当前对象`target`对应的依赖映射Map。
     let depsMap = targetMap.get(target)
+    // 如果不存在，则为这个对象创建一个新的Map，并将其设置到`targetMap`中。
     if (!depsMap) {
       targetMap.set(target, (depsMap = new Map()))
     }
+    // 尝试从`depsMap`中获取当前属性`key`对应的依赖集合`dep`。
     let dep = depsMap.get(key)
+    // 如果不存在，则创建一个新的依赖集合，并设置到`depsMap`中。
+    // `createDep`是一个创建依赖集合的函数，它可能会接收一个回调函数用于依赖集合被清理时的操作。
     if (!dep) {
       depsMap.set(key, (dep = createDep(() => depsMap!.delete(key))))
     }
+    // 调用`trackEffect`函数，将当前的副作用函数`activeEffect`添加到这个属性的依赖集合`dep`中。
+    // 如果是开发模式（`__DEV__`为真），则传递额外的调试信息，包括目标对象、操作类型和属性键。
+    // 否则，传递`undefined`作为第三个参数。
     trackEffect(
       activeEffect,
       dep,

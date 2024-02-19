@@ -70,6 +70,12 @@ export function trackRefValue(ref: RefBase<any>) {
   }
 }
 
+/**
+ * 触发 Ref 值的更新。
+ * @param ref - 要触发更新的 Ref 对象。
+ * @param dirtyLevel - 脏值级别，默认为 DirtyLevels.Dirty。
+ * @param newVal - 新的值。
+ */
 export function triggerRefValue(
   ref: RefBase<any>,
   dirtyLevel: DirtyLevels = DirtyLevels.Dirty,
