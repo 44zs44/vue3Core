@@ -116,9 +116,9 @@ export class ReactiveEffect<T = any> {
   /*
   "dirtyLevel"是用于跟踪组件的状态是否发生了变化的一个标志。它用于确定何时需要重新渲染组件
   "dirtyLevel"有以下几个取值：
-      DirtyLevels.Clean：表示组件状态是干净的，没有发生任何变化。
+      DirtyLevels.NotDirty：表示组件状态是干净的，没有发生任何变化。
+      DirtyLevels.MaybeDirty：表示组件状态没有发生变化，但是可能存在子组件的状态发生了变化。
       DirtyLevels.Dirty：表示组件状态已经发生了变化，需要重新渲染。
-      DirtyLevels.NotDirty：表示组件状态没有发生变化，但是可能存在子组件的状态发生了变化。
   当组件的状态发生变化时，Vue 3会将"dirtyLevel"设置为DirtyLevels.Dirty，
   这样在下一次渲染时，Vue 3会重新计算组件的虚拟DOM，并将其与之前的虚拟DOM进行对比，找出需要更新的部分进行局部更新。
  */
@@ -215,30 +215,47 @@ export interface ReactiveEffectRunner<T = any> {
  * @param options - Allows to control the effect's behaviour.
  * @returns A runner that can be used to control the effect after creation.
  */
+// effect函数用于创建一个响应式的副作用。它接受一个函数fn和一个可选的配置对象options。
 export function effect<T = any>(
+  // fn是当响应式对象发生变化时需要执行的函数。
   fn: () => T,
+  // options是一个可选参数，用于配置副作用的行为。
   options?: ReactiveEffectOptions,
 ): ReactiveEffectRunner {
+  // 如果传入的fn已经是一个ReactiveEffectRunner的实例，那么将使用它内部的fn函数。
   if ((fn as ReactiveEffectRunner).effect instanceof ReactiveEffect) {
     fn = (fn as ReactiveEffectRunner).effect.fn
   }
 
+  // 创建一个ReactiveEffect实例。ReactiveEffect是一个类，用于封装副作用函数和其行为。
   const _effect = new ReactiveEffect(fn, NOOP, () => {
+    // 如果_effect标记为dirty，则再次执行它。
     if (_effect.dirty) {
       _effect.run()
     }
   })
+
+  // 如果提供了options，则将这些选项合并到_effect实例中。
   if (options) {
     extend(_effect, options)
+    // 如果options中指定了scope，则将_effect记录到相应的作用域中。
     if (options.scope) recordEffectScope(_effect, options.scope)
   }
+
+  // 如果没有指定lazy选项或者lazy为false，则立即执行_effect。
   if (!options || !options.lazy) {
     _effect.run()
   }
+
+  // runner是_effect.run方法的绑定版本，用于外部调用。
   const runner = _effect.run.bind(_effect) as ReactiveEffectRunner
+  // 将_effect实例附加到runner上，以便外部可以访问。
   runner.effect = _effect
+
+  // 返回runner，这是一个函数，可以用于手动控制副作用的执行。
   return runner
 }
+
 
 /**
  * Stops the effect associated with the given runner.
@@ -324,6 +341,7 @@ export function trackEffect(
 
 const queueEffectSchedulers: EffectScheduler[] = []
 
+//遍历给定的依赖项（通常是一个响应式属性或对象所关联的副作用函数集合），并根据脏级别和其他条件决定是否需要触发和调度这些副作用
 export function triggerEffects(
   dep: Dep, // 依赖项
   dirtyLevel: DirtyLevels, // 脏级别，表示数据的变化程度
