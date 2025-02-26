@@ -121,10 +121,12 @@ export function queueJob(job: SchedulerJob) {
 }
 
 /**
+ * 每添加一个任务都会触发
  * queueFlush - 触发队列的刷新
  * 通过 Promise 微任务来异步执行队列中的任务
  */
 function queueFlush() {
+  //没有正在刷新队列且没有待处理的刷新
   if (!isFlushing && !isFlushPending) {
     isFlushPending = true
     currentFlushPromise = resolvedPromise.then(flushJobs)
