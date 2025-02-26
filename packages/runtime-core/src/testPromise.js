@@ -55,7 +55,7 @@ let count = 0;
 resolvedPromise.then(() => {
     console.log('callback before', count);
 }).then(() => {
-    console.log('promise before1', count);
+    console.log('promise before', count);
 });
 
 // 执行 this.count++
@@ -63,6 +63,12 @@ resolvedPromise.then(() => {
 const currentFlushPromise = resolvedPromise.then(() => {
     count++;
     console.log('render', count);
+    setTimeout(() => {
+        console.log('setTimeout', count);
+    },0)
+    Promise.resolve().then(() => {
+        console.log('render promise after', count);
+    });
 });
 
 // 第二次注册 nextTick
